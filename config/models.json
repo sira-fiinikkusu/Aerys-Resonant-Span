@@ -1,0 +1,19 @@
+{
+  "models": {
+    "haiku": "anthropic/claude-haiku-4.5",
+    "sonnet": "anthropic/claude-sonnet-4.5",
+    "opus": "anthropic/claude-opus-4-6"
+  },
+  "routing": {
+    "greeting": "haiku",
+    "simple_qa": "sonnet",
+    "code_help": "sonnet",
+    "research": "opus",
+    "creative": "sonnet",
+    "analysis": "opus",
+    "system_task": "haiku"
+  },
+  "limits": {
+    "opus_daily": 10
+  }
+}

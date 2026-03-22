@@ -1,0 +1,64 @@
+# Aerys Infrastructure — Docker Compose template
+# Copy .env.example to .env and fill in your values before running
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: n8n
+    volumes:
+      - ${HOME}/aerys/data/postgres:/var/lib/postgresql/data
+      - ${HOME}/aerys/migrations:/docker-entrypoint-initdb.d
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -h localhost -U ${POSTGRES_USER} -d n8n']
+      interval: 30s
+      timeout: 30s
+      retries: 5
+      start_period: 60s
+
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    restart: unless-stopped
+    environment:
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: n8n
+      DB_POSTGRESDB_USER: ${POSTGRES_USER}
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+      EXECUTIONS_DATA_PRUNE: "true"
+      EXECUTIONS_DATA_MAX_AGE: "720"
+      EXECUTIONS_DATA_PRUNE_MAX_COUNT: "10000"
+      N8N_SECURE_COOKIE: "false"
+      N8N_COMMUNITY_PACKAGES_ENABLED: "true"
+      N8N_COMMUNITY_PACKAGES_ALLOW_TOOL_USAGE: "true"
+      WEBHOOK_URL: ${WEBHOOK_URL}
+      N8N_EDITOR_BASE_URL: ${N8N_EDITOR_BASE_URL}
+      NODE_OPTIONS: "--max-old-space-size=1536"
+      NODE_FUNCTION_ALLOW_BUILTIN: "fs"
+      GENERIC_TIMEZONE: ${GENERIC_TIMEZONE}
+    ports:
+      - "5678:5678"
+    volumes:
+      - ${HOME}/aerys/config/n8n:/home/node/.n8n
+      - ${HOME}/aerys/config:/home/node/aerys-config:ro
+      - ${HOME}/aerys/evals:/home/node/aerys-evals:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
