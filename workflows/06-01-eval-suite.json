@@ -1,0 +1,315 @@
+{
+  "updatedAt": "2026-01-01T00:00:00.000Z",
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "id": "06-01-eval-suite",
+  "name": "06-01 Eval Suite",
+  "description": null,
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "d0a0a001-0001-0001-0001-000000000001",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        250,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const fs = require('fs');\nconst dataPath = '/home/node/aerys-evals/baseline.json';\nlet dataset;\ntry {\n  dataset = JSON.parse(fs.readFileSync(dataPath, 'utf8'));\n} catch(e) {\n  return [{json: {error: 'Could not read baseline.json at ' + dataPath + '. Ensure evals volume is mounted in docker-compose.yml and container is restarted.', detail: e.message}}];\n}\nconst staticData = $getWorkflowStaticData('global');\nstaticData.scores = [];\nstaticData.details = [];\nstaticData.total = dataset.length;\n\nreturn dataset.map(tc => ({json: tc}));"
+      },
+      "id": "d0a0a001-0001-0001-0001-000000000002",
+      "name": "Load Dataset",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        470,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "d0a0a001-0001-0001-0001-000000000003",
+      "name": "SplitInBatches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        690,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const tc = $json;\nreturn [{json: {\n  source_channel: 'discord',\n  channel_id: 'YOUR_DEBUG_CHANNEL_ID',\n  guild_id: null,\n  user_id: '60426939629838336',\n  username: 'sira',\n  message_text: tc.user_message || '(empty message)',\n  message_id: 'eval_' + tc.id,\n  is_dm: true,\n  is_mention: false,\n  is_edit: false,\n  conversation_privacy: 'private',\n  attachments: [],\n  timestamp: Date.now(),\n  location_label: 'Discord — Private DM',\n  session_key: 'YOUR_OWNER_PERSON_ID',\n  person_id: 'YOUR_OWNER_PERSON_ID',\n  display_name: 'Saelen',\n  thread_context: '',\n  memory_context: '',\n  profile_context: '',\n  cold_start: false,\n  _test_case_id: tc.id,\n  _test_category: tc.category,\n  _expected_behavior: tc.expected_behavior,\n  _start_ts: Date.now()\n}}];"
+      },
+      "id": "d0a0a001-0001-0001-0001-000000000004",
+      "name": "Build Test Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        910,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "YOUR_CORE_AGENT_WORKFLOW_ID",
+          "mode": "id"
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "d0a0a001-0001-0001-0001-000000000005",
+      "name": "Execute Core Agent",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        1130,
+        500
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const coreOutput = $json;\nconst testInput = $('Build Test Input').item.json;\n\nconst agentResponse = coreOutput.output || coreOutput.text || coreOutput.content || JSON.stringify(coreOutput);\n\nreturn [{json: {\n  test_case_id: testInput._test_case_id,\n  category: testInput._test_category,\n  user_message: testInput.message_text,\n  expected_behavior: testInput._expected_behavior,\n  agent_response: agentResponse,\n  start_ts: testInput._start_ts,\n  response_time_ms: Date.now() - testInput._start_ts\n}}];"
+      },
+      "id": "d0a0a001-0001-0001-0001-000000000006",
+      "name": "Capture Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1350,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $json;\n\nconst systemPrompt = 'You are an expert evaluator for an AI assistant named Aerys. Given a user message, the expected behavior criteria, and Aerys\\'s actual response, score the response 1-5:\\n\\n5 = Perfect: accurate, natural, in Aerys\\'s voice, directly addresses the question, meets all expected behavior criteria\\n4 = Good: mostly correct, minor issues with tone or completeness\\n3 = Acceptable: correct but mechanical, missing personality, or slightly off-topic\\n2 = Poor: partially wrong, ignores the question, or very out of character\\n1 = Fail: wrong, harmful, complete non-answer, or error message\\n\\nRespond with JSON only:\\n{\"reasoning\": \"<1-2 sentence analysis>\", \"score\": <1-5>}';\n\nconst userPrompt = 'User message: ' + data.user_message + '\\n\\nExpected behavior: ' + data.expected_behavior + '\\n\\nAerys response: ' + data.agent_response;\n\nreturn [{json: {\n  test_case_id: data.test_case_id,\n  category: data.category,\n  user_message: data.user_message,\n  expected_behavior: data.expected_behavior,\n  agent_response: data.agent_response,\n  start_ts: data.start_ts,\n  response_time_ms: data.response_time_ms,\n  _judge_body: {\n    model: 'anthropic/claude-sonnet-4-5',\n    max_tokens: 500,\n    temperature: 0,\n    messages: [\n      {role: 'system', content: systemPrompt},\n      {role: 'user', content: userPrompt}\n    ]\n  }\n}}];"
+      },
+      "id": "d0a0a001-0001-0001-0001-00000000000a",
+      "name": "Build Judge Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1570,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "HTTP-Referer",
+              "value": "https://your-domain.example.com"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json._judge_body) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "d0a0a001-0001-0001-0001-000000000007",
+      "name": "LLM Judge",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1790,
+        500
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "YOUR_OPENROUTER_HEADER_AUTH_ID",
+          "name": "OpenRouter Header Auth"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const judgeRaw = $json;\nconst testData = $('Build Judge Request').item.json;\n\nlet score = 3;\nlet reasoning = 'Parse error - defaulting to 3';\n\ntry {\n  if (judgeRaw.error) {\n    reasoning = 'LLM Judge HTTP error: ' + JSON.stringify(judgeRaw.error);\n    score = 0;\n  } else {\n    const content = judgeRaw.choices[0].message.content;\n    const cleaned = content.replace(/```json\\n?/g, '').replace(/```/g, '').trim();\n    const parsed = JSON.parse(cleaned);\n    score = parsed.score || 3;\n    reasoning = parsed.reasoning || parsed.reasoning_summary || 'No reasoning provided';\n  }\n} catch(e) {\n  reasoning = 'Parse failed: ' + e.message + ' | Raw: ' + JSON.stringify(judgeRaw).substring(0, 200);\n}\n\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.scores) staticData.scores = [];\nif (!staticData.details) staticData.details = [];\n\nstaticData.scores.push(score);\nstaticData.details.push({\n  id: testData.test_case_id,\n  category: testData.category,\n  score: score,\n  reasoning: reasoning,\n  response_time_ms: testData.response_time_ms,\n  agent_response_preview: (testData.agent_response || '').substring(0, 200)\n});\n\nreturn [{json: {\n  test_case_id: testData.test_case_id,\n  category: testData.category,\n  score: score,\n  reasoning: reasoning,\n  response_time_ms: testData.response_time_ms,\n  progress: staticData.scores.length + '/' + (staticData.total || '?')\n}}];"
+      },
+      "id": "d0a0a001-0001-0001-0001-000000000008",
+      "name": "Parse Score",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2010,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\nconst scores = staticData.scores || [];\nconst details = staticData.details || [];\n\nif (scores.length === 0) {\n  return [{json: {error: 'No scores collected', details: []}}];\n}\n\nconst avg = scores.reduce((a, b) => a + b, 0) / scores.length;\n\nconst byCategory = {};\ndetails.forEach(d => {\n  if (!byCategory[d.category]) {\n    byCategory[d.category] = {scores: [], count: 0, total_response_time_ms: 0};\n  }\n  byCategory[d.category].scores.push(d.score);\n  byCategory[d.category].count++;\n  byCategory[d.category].total_response_time_ms += (d.response_time_ms || 0);\n});\n\nconst categoryReport = {};\nfor (const [cat, data] of Object.entries(byCategory)) {\n  const catAvg = data.scores.reduce((a, b) => a + b, 0) / data.scores.length;\n  categoryReport[cat] = {\n    average_score: Number(catAvg.toFixed(2)),\n    count: data.count,\n    min: Math.min(...data.scores),\n    max: Math.max(...data.scores),\n    avg_response_time_ms: Math.round(data.total_response_time_ms / data.count)\n  };\n}\n\nconst report = {\n  baseline_run: new Date().toISOString(),\n  total_cases: scores.length,\n  average_score: Number(avg.toFixed(2)),\n  min_score: Math.min(...scores),\n  max_score: Math.max(...scores),\n  by_category: categoryReport,\n  details: details\n};\n\nstaticData.scores = [];\nstaticData.details = [];\nstaticData.total = 0;\n\nreturn [{json: report}];"
+      },
+      "id": "d0a0a001-0001-0001-0001-000000000009",
+      "name": "Format Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        910,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Load Dataset",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Dataset": {
+      "main": [
+        [
+          {
+            "node": "SplitInBatches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SplitInBatches": {
+      "main": [
+        [
+          {
+            "node": "Format Report",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Test Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Test Input": {
+      "main": [
+        [
+          {
+            "node": "Execute Core Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Core Agent": {
+      "main": [
+        [
+          {
+            "node": "Capture Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Capture Response": {
+      "main": [
+        [
+          {
+            "node": "Build Judge Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Judge Request": {
+      "main": [
+        [
+          {
+            "node": "LLM Judge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM Judge": {
+      "main": [
+        [
+          {
+            "node": "Parse Score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Score": {
+      "main": [
+        [
+          {
+            "node": "SplitInBatches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "staticData": null,
+  "meta": null,
+  "pinData": {},
+  "versionId": "00000000-0000-0000-0000-000000000000",
+  "activeVersionId": null,
+  "versionCounter": 9,
+  "triggerCount": 0,
+  "shared": [
+    {
+      "updatedAt": "2026-03-09T00:36:56.391Z",
+      "createdAt": "2026-03-09T00:36:56.391Z",
+      "role": "workflow:owner",
+      "workflowId": "YOUR_EVAL_WORKFLOW_ID",
+      "projectId": "YOUR_N8N_PROJECT_ID",
+      "project": {
+        "updatedAt": "2026-01-01T00:00:00.000Z",
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "id": "YOUR_N8N_PROJECT_ID",
+        "name": "Your Project",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "00000000-0000-0000-0000-000000000000"
+      }
+    }
+  ],
+  "tags": [],
+  "activeVersion": null
+}

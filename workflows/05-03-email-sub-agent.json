@@ -1,0 +1,2047 @@
+{
+  "updatedAt": "2026-01-01T00:00:00.000Z",
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "id": "05-03-email-sub-agent",
+  "name": "05-03 Email Sub-Agent",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "id": "email-trigger-1",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        400
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "email-read-input-2",
+      "name": "Read Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        400
+      ],
+      "parameters": {
+        "jsCode": "// Read Input — parses LLM intent output with regex fallback\nconst trigger = $('Execute Workflow Trigger').first().json;\nconst llmRaw = $input.first().json;\n\nconst OWNER_PERSON_ID = 'YOUR_OWNER_PERSON_ID';\n\n// Try to parse LLM JSON output\nlet parsed = null;\nif (!llmRaw.error) {\n  try {\n    const content = llmRaw.text || llmRaw.output || llmRaw.choices?.[0]?.message?.content || '';\n    const jsonStr = content.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n    parsed = JSON.parse(jsonStr);\n  } catch(e) {}\n}\n\nlet action = trigger.action || parsed?.action || null;\nlet to_address = trigger.action ? trigger.to_address : (parsed?.to_address || null);\nlet subject = trigger.subject || parsed?.subject || null;\nlet body_prompt = trigger.body_prompt || parsed?.body_prompt || null;\nlet search_query = trigger.search_query || parsed?.search_query || null;\nlet account = trigger.account || parsed?.account || null;\nlet confirm_draft_id = trigger.confirm_draft_id || parsed?.confirm_draft_id || null;\nlet source_channel = trigger.source_channel || 'discord';\n\n// Regex fallback if LLM didn't resolve action\nif (!action) {\n  const q = (trigger.query || '').trim();\n  const actionKV = q.match(/\\baction:\\s*(\\w+)/i);\n  if (actionKV) {\n    action = actionKV[1].toLowerCase();\n  } else if (/\\bsearch\\b/i.test(q) || /\\bfind\\b/i.test(q) || /\\blook\\s+for\\b/i.test(q)) {\n    action = 'search';\n    if (!search_query) {\n      let cleaned = q.replace(/^\\s*(search(\\s+for)?|find|look\\s+for)\\s*/i, '').trim();\n      cleaned = cleaned.replace(/^.*?\\binbox\\s+for\\s+/i, '').trim();\n      cleaned = cleaned.replace(/^[\"']|[\"']$/g, '').trim();\n      if (cleaned) search_query = cleaned;\n    }\n  } else if (/\\bsend\\b/i.test(q) || /\\bcompose\\b/i.test(q) || /\\bwrite\\b/i.test(q)) {\n    action = 'send';\n  } else if (/\\bconfirm\\b/i.test(q) || /\\byes\\s+send\\b/i.test(q)) {\n    action = 'confirm';\n  } else {\n    action = 'read';\n  }\n  if (!to_address) {\n    const m = q.match(/\\bto:\\s*([^\\s,]+)/i);\n    if (m) to_address = m[1].trim();\n  }\n  if (!subject) {\n    const m = q.match(/\\bsubject:\\s*(.+?)(?:,\\s*(?:body|search_query|action|to):|$)/i);\n    if (m) subject = m[1].trim();\n  }\n  if (!body_prompt) {\n    const m = q.match(/\\bbody:\\s*(.+)$/i);\n    if (m) body_prompt = m[1].trim();\n  }\n}\n\n// Account detection\nif (!account) {\n  const q = (trigger.query || '').toLowerCase();\n  if (/\\b(your|aerys)\\s*(inbox|email|mail|messages?)\\b/.test(q) || /\\baerys\\s+inbox\\b/.test(q)) {\n    account = 'aerys';\n  } else {\n    account = 'user';\n  }\n}\n\naction = action || 'read';\n\n// person_id: use trigger value if present, fall back to 'unknown' (NOT owner)\n// Check Email Auth gates access before this node runs\nconst person_id = trigger.person_id || 'unknown';\n\nreturn [{json: {\n  action,\n  person_id,\n  to_address,\n  subject,\n  body_prompt,\n  search_query,\n  account,\n  confirm_draft_id,\n  source_channel\n}}];"
+      }
+    },
+    {
+      "id": "email-route-action-3",
+      "name": "Route by Action",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        940,
+        400
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "r1",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "send",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "r2",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "confirm_send",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "r3",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "read",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "r4",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "search",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "email-parse-body-5",
+      "name": "Parse Email Body",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        200
+      ],
+      "parameters": {
+        "jsCode": "const resp = $input.first().json;\n// chainLlm outputs {text: \"...\"} — not OpenAI choices format\nconst emailBody = resp?.text || resp?.output || resp?.choices?.[0]?.message?.content || 'I had trouble drafting that email. Please try again.';\nconst input = $('Read Input').item.json;\nreturn [{json: {\n  email_body: emailBody,\n  person_id: input.person_id,\n  to_address: input.to_address,\n  subject: input.subject || '(no subject)'\n}}];"
+      }
+    },
+    {
+      "id": "email-save-draft-6",
+      "name": "Save Draft",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1440,
+        200
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO pending_emails (person_id, to_address, subject, body, status) VALUES ($1::uuid, $2, $3, $4, 'pending') RETURNING id",
+        "options": {
+          "queryReplacement": "={{ [$json.person_id, $json.to_address, $json.subject, $json.email_body] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "YOUR_POSTGRES_CREDENTIAL_ID",
+          "name": "Aerys DB (aerys)"
+        }
+      }
+    },
+    {
+      "id": "email-format-draft-7",
+      "name": "Format Draft Preview",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        200
+      ],
+      "parameters": {
+        "jsCode": "const draft = $('Save Draft').item.json;\nconst body = $('Parse Email Body').item.json;\nconst result = `Here's the draft:\\n\\n**To:** ${body.to_address}\\n**Subject:** ${body.subject}\\n\\n${body.email_body}\\n\\nReply with \"send it\" to send, or tell me what to change.`;\nreturn [{json: {result}}];"
+      }
+    },
+    {
+      "id": "email-fetch-draft-8",
+      "name": "Fetch Pending Draft",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        960,
+        380
+      ],
+      "parameters": {
+        "resource": "database",
+        "operation": "executeQuery",
+        "query": "WITH params AS (SELECT $1::uuid AS pid),\nlatest AS (\n  SELECT pe.id, pe.to_address, pe.subject, pe.body\n  FROM pending_emails pe JOIN params p ON pe.person_id = p.pid\n  WHERE pe.status = 'pending' ORDER BY pe.created_at DESC LIMIT 1\n)\nSELECT id, to_address, subject, body FROM latest\nUNION ALL\nSELECT NULL::integer, NULL::text, NULL::text, NULL::text WHERE NOT EXISTS (SELECT 1 FROM latest)",
+        "options": {
+          "queryReplacement": "={{ [$('Read Input').item.json.person_id] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "YOUR_POSTGRES_CREDENTIAL_ID",
+          "name": "Aerys DB (aerys)"
+        }
+      }
+    },
+    {
+      "id": "email-check-draft-9",
+      "name": "Check Has Draft",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        380
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ Boolean($json.id) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "email-no-draft-10",
+      "name": "No Draft Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        300
+      ],
+      "parameters": {
+        "jsCode": "return [{json: {result: \"I don't have a pending draft for you. What would you like to send?\"}}];"
+      }
+    },
+    {
+      "id": "email-send-gmail-11",
+      "name": "Send Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1440,
+        460
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "sendTo": "={{ $json.to_address }}",
+        "subject": "={{ $json.subject }}",
+        "message": "={{ $json.body }}",
+        "emailType": "text",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "YOUR_GMAIL_FULL_CREDENTIAL_ID",
+          "name": "Gmail - Aerys"
+        }
+      }
+    },
+    {
+      "id": "email-mark-sent-12",
+      "name": "Mark Sent",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1680,
+        460
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE pending_emails SET status='sent' WHERE id=$1",
+        "options": {
+          "queryReplacement": "={{ [$('Fetch Pending Draft').item.json.id] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "YOUR_POSTGRES_CREDENTIAL_ID",
+          "name": "Aerys DB (aerys)"
+        }
+      }
+    },
+    {
+      "id": "email-format-sent-13",
+      "name": "Format Sent Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        460
+      ],
+      "parameters": {
+        "jsCode": "const draft = $('Fetch Pending Draft').item.json;\nreturn [{json: {result: `Sent! Email to ${draft.to_address} with subject '${draft.subject}' is on its way.`}}];"
+      }
+    },
+    {
+      "id": "email-get-recent-14",
+      "name": "Get Recent Emails",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        960,
+        560
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "getAll",
+        "returnAll": false,
+        "limit": 10,
+        "filters": {
+          "labelIds": [
+            "INBOX"
+          ]
+        },
+        "simple": true
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "YOUR_GMAIL_FULL_CREDENTIAL_ID",
+          "name": "Gmail - Aerys"
+        }
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "id": "email-format-list-15",
+      "name": "Format Email List",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        560
+      ],
+      "parameters": {
+        "jsCode": "const account = $('Read Input').first().json.account || 'aerys';\nconst emails = $input.all().map(i => i.json).filter(e => e.id);\nif (emails.length === 0) {\n  const msg = account === 'user' ? 'Your inbox is empty — all clear.' : 'My inbox is empty — all clear.';\n  return [{json: {result: msg}}];\n}\nconst list = emails.map((e, i) => {\n  const from = e.From || e.from || 'unknown';\n  const subject = e.Subject || e.subject || '(no subject)';\n  const snippet = (e.snippet || '').substring(0, 120);\n  return `${i+1}. From: ${from}\\n   ${subject}\\n   ${snippet}`;\n}).join('\\n\\n');\nconst header = account === 'user' ? \"Here's what's in your inbox:\" : \"Here's what's in my inbox:\";\nreturn [{json: {result: `${header}\\n\\n${list}`}}];"
+      }
+    },
+    {
+      "id": "email-route-account-16",
+      "name": "Route by Account",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        960,
+        740
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c2",
+              "leftValue": "={{ $json.account }}",
+              "rightValue": "user",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "caseSensitive": false
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "email-search-user-17",
+      "name": "Search Emails User",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1200,
+        680
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "getAll",
+        "returnAll": false,
+        "limit": 5,
+        "filters": {
+          "q": "={{ $json.search_query }}"
+        },
+        "simple": true
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "YOUR_GMAIL_READONLY_CREDENTIAL_ID",
+          "name": "Gmail - User (read-only)"
+        }
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "id": "email-search-aerys-18",
+      "name": "Search Emails Aerys",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1200,
+        800
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "getAll",
+        "returnAll": false,
+        "limit": 5,
+        "filters": {
+          "q": "={{ $json.search_query }}"
+        },
+        "simple": true
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "YOUR_GMAIL_FULL_CREDENTIAL_ID",
+          "name": "Gmail - Aerys"
+        }
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "id": "email-format-search-19",
+      "name": "Format Search Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        740
+      ],
+      "parameters": {
+        "jsCode": "const input = $('Read Input').item.json;\nconst emails = $input.all().map(i => i.json).filter(e => e.id);\nif (emails.length === 0) {\n  return [{json: {result: `Nothing found matching '${input.search_query}'.`}}];\n}\nconst list = emails.map((e, i) => {\n  const from = e.From || e.from || 'unknown';\n  const subject = e.Subject || e.subject || '(no subject)';\n  const snippet = (e.snippet || '').substring(0, 120);\n  return `${i+1}. From: ${from}\\n   ${subject}\\n   ${snippet}`;\n}).join('\\n\\n');\nreturn [{json: {result: `Found ${emails.length} matching '${input.search_query}':\\n\\n${list}`}}];\n"
+      }
+    },
+    {
+      "id": "email-return-20",
+      "name": "Return Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2160,
+        460
+      ],
+      "parameters": {
+        "jsCode": "return [{json: {result: $json.result || 'Done.'}}];"
+      }
+    },
+    {
+      "id": "email-auth-gate",
+      "name": "Check Email Auth",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        240,
+        240
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "auth-check-1",
+              "leftValue": "={{ $('Execute Workflow Trigger').first().json.person_id || 'YOUR_OWNER_PERSON_ID' }}",
+              "rightValue": "YOUR_OWNER_PERSON_ID",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "email-access-denied",
+      "name": "Email Access Denied",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        240
+      ],
+      "parameters": {
+        "jsCode": "return [{json: {\n  result: 'EMAIL_ACCESS_DENIED: Email access is restricted to the account owner. Inform the user clearly and directly: you cannot access email for them — this is a permanent restriction, not a temporary issue. Do not suggest trying again or offer workarounds.'\n}}];"
+      }
+    },
+    {
+      "id": "email-chain-llm-01",
+      "name": "Parse Email Intent",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        460,
+        400
+      ],
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Execute Workflow Trigger').first().json.query || '' }}",
+        "messages": {
+          "messageValues": [
+            {
+              "type": "SystemMessagePromptTemplate",
+              "message": "You are an email intent parser. Extract the user's email intent and return ONLY a valid JSON object—no markdown, no code fences, no explanation.\n\nSchema:\n{\n  \"action\": \"read|search|send|confirm\",\n  \"account\": \"aerys|user\",\n  \"search_query\": \"string or null\",\n  \"to_address\": \"email or null\",\n  \"subject\": \"string or null\",\n  \"body_prompt\": \"string or null\",\n  \"confirm_draft_id\": \"string or null\"\n}\n\nRules for action:\n- \"read\": check/show inbox, unread emails (default)\n- \"search\": find/search/look for specific emails\n- \"send\": compose/write/send an email\n- \"confirm\": confirm/approve a pending draft\n\nRules for account:\n- \"user\": the owner's personal inbox. Use this when: \"my inbox\", \"my email\", \"Saelen's inbox\", \"search inbox\", or no clear ownership signal (DEFAULT)\n- \"aerys\": Aerys's own inbox. Only use this when explicitly: \"your inbox\", \"aerys inbox\", \"aerys email\"\n\nFor search_query: extract ONLY the search terms, not inbox references. E.g. \"search inbox for aura\" → search_query=\"aura\"\n\nReturn null for unused fields. Return ONLY the JSON object."
+            }
+          ]
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "email-llm-model-01",
+      "name": "OpenRouter Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        460,
+        580
+      ],
+      "parameters": {
+        "model": "google/gemini-2.5-flash-lite"
+      },
+      "credentials": {
+        "openRouterApi": {
+          "id": "YOUR_OPENROUTER_CREDENTIAL_ID",
+          "name": "OpenRouter (Aerys)"
+        }
+      }
+    },
+    {
+      "id": "email-gen-body-llm",
+      "name": "Generate Email Body",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        960,
+        200
+      ],
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ 'Draft: ' + ($json.body_prompt || '') }}",
+        "messages": {
+          "messageValues": [
+            {
+              "type": "SystemMessagePromptTemplate",
+              "message": "You are Aerys. Draft a professional email based on the user request. Return ONLY the email body text — no subject line, no headers, no greeting label. Plain text only — no markdown, no asterisks, no bold or italic formatting. Sign as Aerys."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "email-gen-body-model",
+      "name": "Email Body Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        960,
+        380
+      ],
+      "parameters": {
+        "model": "google/gemini-2.5-flash-lite"
+      },
+      "credentials": {
+        "openRouterApi": {
+          "id": "YOUR_OPENROUTER_CREDENTIAL_ID",
+          "name": "OpenRouter (Aerys)"
+        }
+      }
+    },
+    {
+      "id": "email-route-read-acct",
+      "name": "Route Read by Account",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1180,
+        560
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.account }}",
+              "rightValue": "user",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "caseSensitive": false
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "email-get-recent-user",
+      "name": "Get Recent Emails User",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        480
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "getAll",
+        "returnAll": false,
+        "limit": 10,
+        "filters": {
+          "labelIds": [
+            "INBOX"
+          ]
+        },
+        "simple": true
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "YOUR_GMAIL_READONLY_CREDENTIAL_ID",
+          "name": "Gmail - User (read-only)"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Read Input": {
+      "main": [
+        [
+          {
+            "node": "Route by Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Action": {
+      "main": [
+        [
+          {
+            "node": "Generate Email Body",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fetch Pending Draft",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Route Read by Account",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Route by Account",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Email Body": {
+      "main": [
+        [
+          {
+            "node": "Save Draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Draft": {
+      "main": [
+        [
+          {
+            "node": "Format Draft Preview",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Draft Preview": {
+      "main": [
+        [
+          {
+            "node": "Return Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Pending Draft": {
+      "main": [
+        [
+          {
+            "node": "Check Has Draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Has Draft": {
+      "main": [
+        [
+          {
+            "node": "Send Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Draft Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "No Draft Message": {
+      "main": [
+        [
+          {
+            "node": "Return Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Email": {
+      "main": [
+        [
+          {
+            "node": "Mark Sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Sent": {
+      "main": [
+        [
+          {
+            "node": "Format Sent Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Sent Result": {
+      "main": [
+        [
+          {
+            "node": "Return Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Recent Emails": {
+      "main": [
+        [
+          {
+            "node": "Format Email List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Email List": {
+      "main": [
+        [
+          {
+            "node": "Return Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Account": {
+      "main": [
+        [
+          {
+            "node": "Search Emails User",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Search Emails Aerys",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Emails User": {
+      "main": [
+        [
+          {
+            "node": "Format Search Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Emails Aerys": {
+      "main": [
+        [
+          {
+            "node": "Format Search Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Search Results": {
+      "main": [
+        [
+          {
+            "node": "Return Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Email Auth": {
+      "main": [
+        [
+          {
+            "node": "Read Input",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Email Access Denied",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Access Denied": {
+      "main": [
+        [
+          {
+            "node": "Return Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Email Intent": {
+      "main": [
+        [
+          {
+            "node": "Read Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Parse Email Intent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Body Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Generate Email Body",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Email Body": {
+      "main": [
+        [
+          {
+            "node": "Parse Email Body",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Read by Account": {
+      "main": [
+        [
+          {
+            "node": "Get Recent Emails User",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Recent Emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Recent Emails User": {
+      "main": [
+        [
+          {
+            "node": "Format Email List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Check Email Auth",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "staticData": null,
+  "meta": null,
+  "pinData": null,
+  "versionId": "00000000-0000-0000-0000-000000000000",
+  "activeVersionId": "00000000-0000-0000-0000-000000000000",
+  "versionCounter": 93,
+  "triggerCount": 0,
+  "shared": [
+    {
+      "updatedAt": "2026-03-03T02:24:28.581Z",
+      "createdAt": "2026-03-03T02:24:28.581Z",
+      "role": "workflow:owner",
+      "workflowId": "YOUR_EMAIL_AGENT_WORKFLOW_ID",
+      "projectId": "YOUR_N8N_PROJECT_ID",
+      "project": {
+        "updatedAt": "2026-01-01T00:00:00.000Z",
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "id": "YOUR_N8N_PROJECT_ID",
+        "name": "Your Project",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "00000000-0000-0000-0000-000000000000"
+      }
+    }
+  ],
+  "tags": [],
+  "activeVersion": {
+    "updatedAt": "2026-03-07T05:02:46.312Z",
+    "createdAt": "2026-03-07T05:02:46.312Z",
+    "versionId": "00000000-0000-0000-0000-000000000000",
+    "workflowId": "YOUR_EMAIL_AGENT_WORKFLOW_ID",
+    "nodes": [
+      {
+        "id": "email-trigger-1",
+        "name": "Execute Workflow Trigger",
+        "type": "n8n-nodes-base.executeWorkflowTrigger",
+        "typeVersion": 1,
+        "position": [
+          240,
+          400
+        ],
+        "parameters": {}
+      },
+      {
+        "id": "email-read-input-2",
+        "name": "Read Input",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          700,
+          400
+        ],
+        "parameters": {
+          "jsCode": "// Read Input — parses LLM intent output with regex fallback\nconst trigger = $('Execute Workflow Trigger').first().json;\nconst llmRaw = $input.first().json;\n\nconst OWNER_PERSON_ID = 'YOUR_OWNER_PERSON_ID';\n\n// Try to parse LLM JSON output\nlet parsed = null;\nif (!llmRaw.error) {\n  try {\n    const content = llmRaw.text || llmRaw.output || llmRaw.choices?.[0]?.message?.content || '';\n    const jsonStr = content.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n    parsed = JSON.parse(jsonStr);\n  } catch(e) {}\n}\n\nlet action = trigger.action || parsed?.action || null;\nlet to_address = trigger.action ? trigger.to_address : (parsed?.to_address || null);\nlet subject = trigger.subject || parsed?.subject || null;\nlet body_prompt = trigger.body_prompt || parsed?.body_prompt || null;\nlet search_query = trigger.search_query || parsed?.search_query || null;\nlet account = trigger.account || parsed?.account || null;\nlet confirm_draft_id = trigger.confirm_draft_id || parsed?.confirm_draft_id || null;\nlet source_channel = trigger.source_channel || 'discord';\n\n// Regex fallback if LLM didn't resolve action\nif (!action) {\n  const q = (trigger.query || '').trim();\n  const actionKV = q.match(/\\baction:\\s*(\\w+)/i);\n  if (actionKV) {\n    action = actionKV[1].toLowerCase();\n  } else if (/\\bsearch\\b/i.test(q) || /\\bfind\\b/i.test(q) || /\\blook\\s+for\\b/i.test(q)) {\n    action = 'search';\n    if (!search_query) {\n      let cleaned = q.replace(/^\\s*(search(\\s+for)?|find|look\\s+for)\\s*/i, '').trim();\n      cleaned = cleaned.replace(/^.*?\\binbox\\s+for\\s+/i, '').trim();\n      cleaned = cleaned.replace(/^[\"']|[\"']$/g, '').trim();\n      if (cleaned) search_query = cleaned;\n    }\n  } else if (/\\bsend\\b/i.test(q) || /\\bcompose\\b/i.test(q) || /\\bwrite\\b/i.test(q)) {\n    action = 'send';\n  } else if (/\\bconfirm\\b/i.test(q) || /\\byes\\s+send\\b/i.test(q)) {\n    action = 'confirm';\n  } else {\n    action = 'read';\n  }\n  if (!to_address) {\n    const m = q.match(/\\bto:\\s*([^\\s,]+)/i);\n    if (m) to_address = m[1].trim();\n  }\n  if (!subject) {\n    const m = q.match(/\\bsubject:\\s*(.+?)(?:,\\s*(?:body|search_query|action|to):|$)/i);\n    if (m) subject = m[1].trim();\n  }\n  if (!body_prompt) {\n    const m = q.match(/\\bbody:\\s*(.+)$/i);\n    if (m) body_prompt = m[1].trim();\n  }\n}\n\n// Account detection\nif (!account) {\n  const q = (trigger.query || '').toLowerCase();\n  if (/\\b(your|aerys)\\s*(inbox|email|mail|messages?)\\b/.test(q) || /\\baerys\\s+inbox\\b/.test(q)) {\n    account = 'aerys';\n  } else {\n    account = 'user';\n  }\n}\n\naction = action || 'read';\n\n// person_id: use trigger value if present, fall back to 'unknown' (NOT owner)\n// Check Email Auth gates access before this node runs\nconst person_id = trigger.person_id || 'unknown';\n\nreturn [{json: {\n  action,\n  person_id,\n  to_address,\n  subject,\n  body_prompt,\n  search_query,\n  account,\n  confirm_draft_id,\n  source_channel\n}}];"
+        }
+      },
+      {
+        "id": "email-route-action-3",
+        "name": "Route by Action",
+        "type": "n8n-nodes-base.switch",
+        "typeVersion": 3.2,
+        "position": [
+          940,
+          400
+        ],
+        "parameters": {
+          "rules": {
+            "values": [
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 2
+                  },
+                  "conditions": [
+                    {
+                      "id": "r1",
+                      "leftValue": "={{ $json.action }}",
+                      "rightValue": "send",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                }
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 2
+                  },
+                  "conditions": [
+                    {
+                      "id": "r2",
+                      "leftValue": "={{ $json.action }}",
+                      "rightValue": "confirm_send",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                }
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 2
+                  },
+                  "conditions": [
+                    {
+                      "id": "r3",
+                      "leftValue": "={{ $json.action }}",
+                      "rightValue": "read",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                }
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 2
+                  },
+                  "conditions": [
+                    {
+                      "id": "r4",
+                      "leftValue": "={{ $json.action }}",
+                      "rightValue": "search",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "email-parse-body-5",
+        "name": "Parse Email Body",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1200,
+          200
+        ],
+        "parameters": {
+          "jsCode": "const resp = $input.first().json;\n// chainLlm outputs {text: \"...\"} — not OpenAI choices format\nconst emailBody = resp?.text || resp?.output || resp?.choices?.[0]?.message?.content || 'I had trouble drafting that email. Please try again.';\nconst input = $('Read Input').item.json;\nreturn [{json: {\n  email_body: emailBody,\n  person_id: input.person_id,\n  to_address: input.to_address,\n  subject: input.subject || '(no subject)'\n}}];"
+        }
+      },
+      {
+        "id": "email-save-draft-6",
+        "name": "Save Draft",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.5,
+        "position": [
+          1440,
+          200
+        ],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "INSERT INTO pending_emails (person_id, to_address, subject, body, status) VALUES ($1::uuid, $2, $3, $4, 'pending') RETURNING id",
+          "options": {
+            "queryReplacement": "={{ [$json.person_id, $json.to_address, $json.subject, $json.email_body] }}"
+          }
+        },
+        "credentials": {
+          "postgres": {
+            "id": "YOUR_POSTGRES_CREDENTIAL_ID",
+            "name": "Aerys DB (aerys)"
+          }
+        }
+      },
+      {
+        "id": "email-format-draft-7",
+        "name": "Format Draft Preview",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1680,
+          200
+        ],
+        "parameters": {
+          "jsCode": "const draft = $('Save Draft').item.json;\nconst body = $('Parse Email Body').item.json;\nconst result = `Here's the draft:\\n\\n**To:** ${body.to_address}\\n**Subject:** ${body.subject}\\n\\n${body.email_body}\\n\\nReply with \"send it\" to send, or tell me what to change.`;\nreturn [{json: {result}}];"
+        }
+      },
+      {
+        "id": "email-fetch-draft-8",
+        "name": "Fetch Pending Draft",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.5,
+        "position": [
+          960,
+          380
+        ],
+        "parameters": {
+          "resource": "database",
+          "operation": "executeQuery",
+          "query": "WITH params AS (SELECT $1::uuid AS pid),\nlatest AS (\n  SELECT pe.id, pe.to_address, pe.subject, pe.body\n  FROM pending_emails pe JOIN params p ON pe.person_id = p.pid\n  WHERE pe.status = 'pending' ORDER BY pe.created_at DESC LIMIT 1\n)\nSELECT id, to_address, subject, body FROM latest\nUNION ALL\nSELECT NULL::integer, NULL::text, NULL::text, NULL::text WHERE NOT EXISTS (SELECT 1 FROM latest)",
+          "options": {
+            "queryReplacement": "={{ [$('Read Input').item.json.person_id] }}"
+          }
+        },
+        "credentials": {
+          "postgres": {
+            "id": "YOUR_POSTGRES_CREDENTIAL_ID",
+            "name": "Aerys DB (aerys)"
+          }
+        }
+      },
+      {
+        "id": "email-check-draft-9",
+        "name": "Check Has Draft",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          1200,
+          380
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "c1",
+                "leftValue": "={{ Boolean($json.id) }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "email-no-draft-10",
+        "name": "No Draft Message",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1440,
+          300
+        ],
+        "parameters": {
+          "jsCode": "return [{json: {result: \"I don't have a pending draft for you. What would you like to send?\"}}];"
+        }
+      },
+      {
+        "id": "email-send-gmail-11",
+        "name": "Send Email",
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2.2,
+        "position": [
+          1440,
+          460
+        ],
+        "parameters": {
+          "resource": "message",
+          "operation": "send",
+          "sendTo": "={{ $json.to_address }}",
+          "subject": "={{ $json.subject }}",
+          "message": "={{ $json.body }}",
+          "emailType": "text",
+          "options": {
+            "appendAttribution": false
+          }
+        },
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "YOUR_GMAIL_FULL_CREDENTIAL_ID",
+            "name": "Gmail - Aerys"
+          }
+        }
+      },
+      {
+        "id": "email-mark-sent-12",
+        "name": "Mark Sent",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.5,
+        "position": [
+          1680,
+          460
+        ],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "UPDATE pending_emails SET status='sent' WHERE id=$1",
+          "options": {
+            "queryReplacement": "={{ [$('Fetch Pending Draft').item.json.id] }}"
+          }
+        },
+        "credentials": {
+          "postgres": {
+            "id": "YOUR_POSTGRES_CREDENTIAL_ID",
+            "name": "Aerys DB (aerys)"
+          }
+        }
+      },
+      {
+        "id": "email-format-sent-13",
+        "name": "Format Sent Result",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1920,
+          460
+        ],
+        "parameters": {
+          "jsCode": "const draft = $('Fetch Pending Draft').item.json;\nreturn [{json: {result: `Sent! Email to ${draft.to_address} with subject '${draft.subject}' is on its way.`}}];"
+        }
+      },
+      {
+        "id": "email-get-recent-14",
+        "name": "Get Recent Emails",
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2.2,
+        "position": [
+          960,
+          560
+        ],
+        "parameters": {
+          "resource": "message",
+          "operation": "getAll",
+          "returnAll": false,
+          "limit": 10,
+          "filters": {
+            "labelIds": [
+              "INBOX"
+            ]
+          },
+          "simple": true
+        },
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "YOUR_GMAIL_FULL_CREDENTIAL_ID",
+            "name": "Gmail - Aerys"
+          }
+        },
+        "alwaysOutputData": true
+      },
+      {
+        "id": "email-format-list-15",
+        "name": "Format Email List",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1200,
+          560
+        ],
+        "parameters": {
+          "jsCode": "const account = $('Read Input').first().json.account || 'aerys';\nconst emails = $input.all().map(i => i.json).filter(e => e.id);\nif (emails.length === 0) {\n  const msg = account === 'user' ? 'Your inbox is empty — all clear.' : 'My inbox is empty — all clear.';\n  return [{json: {result: msg}}];\n}\nconst list = emails.map((e, i) => {\n  const from = e.From || e.from || 'unknown';\n  const subject = e.Subject || e.subject || '(no subject)';\n  const snippet = (e.snippet || '').substring(0, 120);\n  return `${i+1}. From: ${from}\\n   ${subject}\\n   ${snippet}`;\n}).join('\\n\\n');\nconst header = account === 'user' ? \"Here's what's in your inbox:\" : \"Here's what's in my inbox:\";\nreturn [{json: {result: `${header}\\n\\n${list}`}}];"
+        }
+      },
+      {
+        "id": "email-route-account-16",
+        "name": "Route by Account",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          960,
+          740
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "c2",
+                "leftValue": "={{ $json.account }}",
+                "rightValue": "user",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals",
+                  "caseSensitive": false
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "email-search-user-17",
+        "name": "Search Emails User",
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2.2,
+        "position": [
+          1200,
+          680
+        ],
+        "parameters": {
+          "resource": "message",
+          "operation": "getAll",
+          "returnAll": false,
+          "limit": 5,
+          "filters": {
+            "q": "={{ $json.search_query }}"
+          },
+          "simple": true
+        },
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "YOUR_GMAIL_READONLY_CREDENTIAL_ID",
+            "name": "Gmail - User (read-only)"
+          }
+        },
+        "alwaysOutputData": true
+      },
+      {
+        "id": "email-search-aerys-18",
+        "name": "Search Emails Aerys",
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2.2,
+        "position": [
+          1200,
+          800
+        ],
+        "parameters": {
+          "resource": "message",
+          "operation": "getAll",
+          "returnAll": false,
+          "limit": 5,
+          "filters": {
+            "q": "={{ $json.search_query }}"
+          },
+          "simple": true
+        },
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "YOUR_GMAIL_FULL_CREDENTIAL_ID",
+            "name": "Gmail - Aerys"
+          }
+        },
+        "alwaysOutputData": true
+      },
+      {
+        "id": "email-format-search-19",
+        "name": "Format Search Results",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1440,
+          740
+        ],
+        "parameters": {
+          "jsCode": "const input = $('Read Input').item.json;\nconst emails = $input.all().map(i => i.json).filter(e => e.id);\nif (emails.length === 0) {\n  return [{json: {result: `Nothing found matching '${input.search_query}'.`}}];\n}\nconst list = emails.map((e, i) => {\n  const from = e.From || e.from || 'unknown';\n  const subject = e.Subject || e.subject || '(no subject)';\n  const snippet = (e.snippet || '').substring(0, 120);\n  return `${i+1}. From: ${from}\\n   ${subject}\\n   ${snippet}`;\n}).join('\\n\\n');\nreturn [{json: {result: `Found ${emails.length} matching '${input.search_query}':\\n\\n${list}`}}];\n"
+        }
+      },
+      {
+        "id": "email-return-20",
+        "name": "Return Result",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2160,
+          460
+        ],
+        "parameters": {
+          "jsCode": "return [{json: {result: $json.result || 'Done.'}}];"
+        }
+      },
+      {
+        "id": "email-auth-gate",
+        "name": "Check Email Auth",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          240,
+          240
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "auth-check-1",
+                "leftValue": "={{ $('Execute Workflow Trigger').first().json.person_id || 'YOUR_OWNER_PERSON_ID' }}",
+                "rightValue": "YOUR_OWNER_PERSON_ID",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals"
+                }
+              }
+            ],
+            "combinator": "and"
+          }
+        }
+      },
+      {
+        "id": "email-access-denied",
+        "name": "Email Access Denied",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          460,
+          240
+        ],
+        "parameters": {
+          "jsCode": "return [{json: {\n  result: 'EMAIL_ACCESS_DENIED: Email access is restricted to the account owner. Inform the user clearly and directly: you cannot access email for them — this is a permanent restriction, not a temporary issue. Do not suggest trying again or offer workarounds.'\n}}];"
+        }
+      },
+      {
+        "id": "email-chain-llm-01",
+        "name": "Parse Email Intent",
+        "type": "@n8n/n8n-nodes-langchain.chainLlm",
+        "typeVersion": 1.9,
+        "position": [
+          460,
+          400
+        ],
+        "parameters": {
+          "promptType": "define",
+          "text": "={{ $('Execute Workflow Trigger').first().json.query || '' }}",
+          "messages": {
+            "messageValues": [
+              {
+                "type": "SystemMessagePromptTemplate",
+                "message": "You are an email intent parser. Extract the user's email intent and return ONLY a valid JSON object—no markdown, no code fences, no explanation.\n\nSchema:\n{\n  \"action\": \"read|search|send|confirm\",\n  \"account\": \"aerys|user\",\n  \"search_query\": \"string or null\",\n  \"to_address\": \"email or null\",\n  \"subject\": \"string or null\",\n  \"body_prompt\": \"string or null\",\n  \"confirm_draft_id\": \"string or null\"\n}\n\nRules for action:\n- \"read\": check/show inbox, unread emails (default)\n- \"search\": find/search/look for specific emails\n- \"send\": compose/write/send an email\n- \"confirm\": confirm/approve a pending draft\n\nRules for account:\n- \"user\": the owner's personal inbox. Use this when: \"my inbox\", \"my email\", \"Saelen's inbox\", \"search inbox\", or no clear ownership signal (DEFAULT)\n- \"aerys\": Aerys's own inbox. Only use this when explicitly: \"your inbox\", \"aerys inbox\", \"aerys email\"\n\nFor search_query: extract ONLY the search terms, not inbox references. E.g. \"search inbox for aura\" → search_query=\"aura\"\n\nReturn null for unused fields. Return ONLY the JSON object."
+              }
+            ]
+          }
+        },
+        "continueOnFail": true
+      },
+      {
+        "id": "email-llm-model-01",
+        "name": "OpenRouter Chat Model",
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+        "typeVersion": 1,
+        "position": [
+          460,
+          580
+        ],
+        "parameters": {
+          "model": "google/gemini-2.5-flash-lite"
+        },
+        "credentials": {
+          "openRouterApi": {
+            "id": "YOUR_OPENROUTER_CREDENTIAL_ID",
+            "name": "OpenRouter (Aerys)"
+          }
+        }
+      },
+      {
+        "id": "email-gen-body-llm",
+        "name": "Generate Email Body",
+        "type": "@n8n/n8n-nodes-langchain.chainLlm",
+        "typeVersion": 1.9,
+        "position": [
+          960,
+          200
+        ],
+        "parameters": {
+          "promptType": "define",
+          "text": "={{ 'Draft: ' + ($json.body_prompt || '') }}",
+          "messages": {
+            "messageValues": [
+              {
+                "type": "SystemMessagePromptTemplate",
+                "message": "You are Aerys. Draft a professional email based on the user request. Return ONLY the email body text — no subject line, no headers, no greeting label. Plain text only — no markdown, no asterisks, no bold or italic formatting. Sign as Aerys."
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "email-gen-body-model",
+        "name": "Email Body Chat Model",
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+        "typeVersion": 1,
+        "position": [
+          960,
+          380
+        ],
+        "parameters": {
+          "model": "google/gemini-2.5-flash-lite"
+        },
+        "credentials": {
+          "openRouterApi": {
+            "id": "YOUR_OPENROUTER_CREDENTIAL_ID",
+            "name": "OpenRouter (Aerys)"
+          }
+        }
+      },
+      {
+        "id": "email-route-read-acct",
+        "name": "Route Read by Account",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          1180,
+          560
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "version": 2,
+              "leftValue": "",
+              "caseSensitive": true,
+              "typeValidation": "strict"
+            },
+            "conditions": [
+              {
+                "id": "c1",
+                "leftValue": "={{ $json.account }}",
+                "rightValue": "user",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals",
+                  "caseSensitive": false
+                }
+              }
+            ],
+            "combinator": "and"
+          }
+        }
+      },
+      {
+        "id": "email-get-recent-user",
+        "name": "Get Recent Emails User",
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2,
+        "position": [
+          1440,
+          480
+        ],
+        "parameters": {
+          "resource": "message",
+          "operation": "getAll",
+          "returnAll": false,
+          "limit": 10,
+          "filters": {
+            "labelIds": [
+              "INBOX"
+            ]
+          },
+          "simple": true
+        },
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "YOUR_GMAIL_READONLY_CREDENTIAL_ID",
+            "name": "Gmail - User (read-only)"
+          }
+        }
+      }
+    ],
+    "connections": {
+      "Read Input": {
+        "main": [
+          [
+            {
+              "node": "Route by Action",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Route by Action": {
+        "main": [
+          [
+            {
+              "node": "Generate Email Body",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Fetch Pending Draft",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Route Read by Account",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Route by Account",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Parse Email Body": {
+        "main": [
+          [
+            {
+              "node": "Save Draft",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Save Draft": {
+        "main": [
+          [
+            {
+              "node": "Format Draft Preview",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Format Draft Preview": {
+        "main": [
+          [
+            {
+              "node": "Return Result",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Fetch Pending Draft": {
+        "main": [
+          [
+            {
+              "node": "Check Has Draft",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Check Has Draft": {
+        "main": [
+          [
+            {
+              "node": "Send Email",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "No Draft Message",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "No Draft Message": {
+        "main": [
+          [
+            {
+              "node": "Return Result",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Send Email": {
+        "main": [
+          [
+            {
+              "node": "Mark Sent",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Mark Sent": {
+        "main": [
+          [
+            {
+              "node": "Format Sent Result",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Format Sent Result": {
+        "main": [
+          [
+            {
+              "node": "Return Result",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get Recent Emails": {
+        "main": [
+          [
+            {
+              "node": "Format Email List",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Format Email List": {
+        "main": [
+          [
+            {
+              "node": "Return Result",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Route by Account": {
+        "main": [
+          [
+            {
+              "node": "Search Emails User",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Search Emails Aerys",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Search Emails User": {
+        "main": [
+          [
+            {
+              "node": "Format Search Results",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Search Emails Aerys": {
+        "main": [
+          [
+            {
+              "node": "Format Search Results",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Format Search Results": {
+        "main": [
+          [
+            {
+              "node": "Return Result",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Check Email Auth": {
+        "main": [
+          [
+            {
+              "node": "Read Input",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Email Access Denied",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Email Access Denied": {
+        "main": [
+          [
+            {
+              "node": "Return Result",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Parse Email Intent": {
+        "main": [
+          [
+            {
+              "node": "Read Input",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "OpenRouter Chat Model": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "Parse Email Intent",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Email Body Chat Model": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "Generate Email Body",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Generate Email Body": {
+        "main": [
+          [
+            {
+              "node": "Parse Email Body",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Route Read by Account": {
+        "main": [
+          [
+            {
+              "node": "Get Recent Emails User",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Get Recent Emails",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get Recent Emails User": {
+        "main": [
+          [
+            {
+              "node": "Format Email List",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Execute Workflow Trigger": {
+        "main": [
+          [
+            {
+              "node": "Check Email Auth",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "authors": "Your Name",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "workflowPublishHistory": [
+      {
+        "createdAt": "2026-03-07T05:02:46.458Z",
+        "id": 1144,
+        "workflowId": "YOUR_EMAIL_AGENT_WORKFLOW_ID",
+        "versionId": "00000000-0000-0000-0000-000000000000",
+        "event": "deactivated",
+        "userId": "00000000-0000-0000-0000-000000000000"
+      },
+      {
+        "createdAt": "2026-03-07T05:02:46.534Z",
+        "id": 1145,
+        "workflowId": "YOUR_EMAIL_AGENT_WORKFLOW_ID",
+        "versionId": "00000000-0000-0000-0000-000000000000",
+        "event": "activated",
+        "userId": "00000000-0000-0000-0000-000000000000"
+      }
+    ]
+  }
+}
