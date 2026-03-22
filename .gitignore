@@ -1,0 +1,21 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# n8n runtime config (contains encryption keys)
+config/n8n/
+
+# Private keys
+*.key
+*.pem
+
+# Runtime data
+data/
+backups/
+*.log
+crash.journal
+
+# OS files
+.DS_Store
+Thumbs.db
