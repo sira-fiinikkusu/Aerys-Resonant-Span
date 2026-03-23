@@ -38,9 +38,9 @@ key-decisions:
   - "aerys git repo initialized at ~/aerys/ separate from planning repo: infrastructure code tracked independently"
 
 patterns-established:
-  - "Pattern 1: SQL migrations use \c aerys at start of each file to ensure correct database context"
-  - "Pattern 2: Phase 2+ schema changes applied via docker exec psql directly (initdb.d scripts don't re-run after first start)"
-  - "Pattern 3: n8n credentials managed via built-in encrypted store (not env vars); N8N_ENCRYPTION_KEY in .env ensures credentials survive container recreation"
+  - 'Pattern 1: SQL migrations use \c aerys at start of each file to ensure correct database context'
+  - 'Pattern 2: Phase 2+ schema changes applied via docker exec psql directly (initdb.d scripts don''t re-run after first start)'
+  - 'Pattern 3: n8n credentials managed via built-in encrypted store (not env vars); N8N_ENCRYPTION_KEY in .env ensures credentials survive container recreation'
 
 requirements-completed: [MEM-07]
 
