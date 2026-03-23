@@ -179,4 +179,123 @@ Every response generates a debug trace pushed to an admin-only Discord channel, 
 
 </details>
 
-<!-- TASK 2 CONTINUES BELOW -->
+<details>
+<summary><h2>Engineering Challenges</h2></summary>
+
+### Task Runner Hang
+
+Workflows with more than six LangChain tool nodes caused n8n Code nodes to hang indefinitely. The root cause was the task runner stalling while resolving workflow context before Code node execution could begin --- the more tool sub-nodes attached to an AI Agent, the larger the context resolution payload. With 21 tool nodes in a single workflow, every Code node timed out at 300 seconds.
+
+**Solution:** Per-tier sub-workflow architecture. The Core Agent became a lean router (~21 nodes: classify intent, switch, execute sub-workflow). Each model tier (Gemini, Sonnet, Opus) runs as a separate sub-workflow (~11 nodes: trigger, AI Agent, LLM, memory, and 7 tools). Each sub-workflow has its own task runner context, keeping node counts well under the threshold. Fallback chain: Opus fails, route to Sonnet; Sonnet fails, route to Gemini.
+
+### IPC Race Condition
+
+Discord's katerlol IPC implementation follows a last-one-activated-wins pattern. When both the guild adapter and DM adapter workflows activate, only the last one to start actually receives messages. Activating them in the wrong order or restarting one without the other left an adapter silently dead --- no errors, just missing messages.
+
+**Solution:** A systemd watcher service (`discord-adapter-watcher.sh`) enforces a precise activation sequence: deactivate both adapters, wait, activate DM adapter first, wait 8 seconds, then activate the guild adapter last. The guild adapter's activation triggers an IPC restart that registers both listeners. The watcher also monitors Docker events to re-run the sequence after n8n container restarts.
+
+### Guardian Credit Burn
+
+The Opus model tier provides the highest quality responses but at significant cost. Without limits, a user could exhaust the daily API budget with a handful of research queries. Tracking needed to be per-day and per-person, with a graceful degradation path rather than hard failures.
+
+**Solution:** An `aerys_model_usage` table tracks daily Opus calls per person. The Guardian workflow checks the count before routing to Opus --- if the 10/day limit is reached, the request falls back to Sonnet with a transparent notification. The counter resets daily. This keeps costs predictable while preserving Opus access for the queries that benefit most from it.
+
+### Memory Misattribution
+
+Before the extraction quality overhaul, the batch extraction pipeline processed guild conversations without grouping by sender. Memories from a multi-person conversation were stored under every `person_id` present --- so if three people chatted, each person's profile would contain memories about all three people's statements, attributed to the wrong person.
+
+**Solution:** Added a group-by-person_id step before extraction. The pipeline now partitions conversation history by sender, extracts memories per person, and stores them with the correct attribution. Existing misattributed data was identified and soft-deleted using `person_id` comparison against message authorship.
+
+### LangChain Context Black Hole
+
+n8n's AI Agent node strips all input fields from its output, returning only `{output: "text"}`. Any downstream node that expects to access the original message content, person_id, platform, or routing metadata via `$json` finds an empty object. This breaks every workflow that needs to do anything with the original context after the AI responds.
+
+**Solution:** Downstream nodes recover context by referencing upstream nodes directly via `$('NodeBeforeAgent').item.json` instead of relying on `$json`. This pattern is applied consistently across all post-agent nodes --- the Output Router, debug trace generator, and error handler all pull original context from named upstream references rather than the AI Agent's output.
+
+</details>
+
+## Why n8n
+
+The most common question about Aerys's architecture is why it uses n8n --- a visual workflow platform --- instead of a traditional TypeScript or Python codebase. The choice was deliberate, and the tradeoffs are worth understanding.
+
+**Visibility into execution.** Every node in every workflow exposes its input and output data in real time. When a message flows through 27 interconnected workflows, the ability to click any node and see exactly what data it received and what it produced makes debugging fundamentally different from reading logs. This visibility was critical during development --- problems like the memory misattribution bug were caught by inspecting node outputs, not by writing additional test infrastructure.
+
+**Rapid iteration speed.** Rewiring logic in n8n is drag-and-drop, not refactoring code. When the architecture needed to split from a monolithic Core Agent into per-tier sub-workflows (to solve the task runner hang), the restructuring took hours rather than days. Adding a new tool to an AI Agent is connecting a node, not writing a new service layer. This iteration speed meant more time spent on behavior and less on plumbing.
+
+**Workflow-as-documentation.** The graph IS the architecture diagram. The visual representation of 27 workflows, their connections, and their data flow serves as living documentation that stays in sync with the implementation. The exported workflow JSONs in this repository are both the source code and the architecture reference --- there is no drift between documentation and reality.
+
+**Self-hosted with full data control.** n8n runs entirely on local infrastructure (currently a Particle Tachyon board), with all data stored in a local PostgreSQL instance. No conversation data, memories, or personal information leaves the network except for API calls to model providers. The Docker Compose setup is portable --- the same configuration will run on the planned Jetson migration target.
+
+## V2 Roadmap
+
+Aerys v1 establishes the conversational foundation --- memory, identity, multi-platform messaging, and model routing. V2 extends this into proactive behavior, new interaction modalities, and infrastructure evolution.
+
+### Voice Integration
+
+Voice is treated as "just another channel" in the Aerys architecture --- the same person profiles, memory pipeline, and personality system apply regardless of whether the input arrives as text or speech. The planned path uses Home Assistant's Voice PE hardware as a satellite, with Whisper for speech-to-text and Piper or ElevenLabs for text-to-speech. A webhook-conversation integration routes transcribed speech through n8n as a standard message. The goal is a voice assistant that remembers context from text conversations and vice versa, not a separate voice product.
+
+### Capability Request Loop
+
+Rather than manually deciding which tools Aerys needs, the system would identify capability gaps during conversations and request new tools. When a user asks Aerys to do something it cannot, instead of just reporting the limitation, it would log the request, propose an implementation approach, and surface it for approval. Aerys becomes a participant in her own development --- a feedback loop where the assistant helps prioritize what to build next.
+
+### Hardware Evolution
+
+Aerys currently runs on a Particle Tachyon board (Qualcomm QCM6490, 8GB RAM). The planned migration moves Aerys to a Jetson Orin Nano Super, which provides GPU acceleration for local inference tasks. The Tachyon board would be repurposed as a portable 5G-connected node --- a mobile satellite that routes requests back to the Jetson over cellular, enabling voice and messaging capabilities on the go.
+
+### Distribution Target
+
+The long-term goal is packaging Aerys as "Aerys Core" --- a Docker Compose stack with database migrations and a workflow seed pack that anyone can deploy. A first-run setup would collect API keys and import workflows automatically. The personality lives in `soul.md` (separate from workflow logic), and all user-specific configuration is isolated to `.env` variables. The model is comparable to self-hosted projects like Immich or Home Assistant --- `docker compose up`, paste API keys, and the system is operational.
+
+### Heartbeat
+
+V1 Aerys is purely reactive --- it only acts when a message arrives. The Heartbeat system adds autonomous scheduled processing: a configurable trigger that wakes Aerys independently to review pending tasks, surface reminders, follow up on open threads, and run reflection cycles. This transforms the assistant from responsive to proactive, which is more aligned with the "companion that knows you" vision.
+
+### Task Management
+
+Persistent task and subtask tables (`aerys_tasks`, `aerys_subtasks`) would give Aerys cross-session task tracking. The AI can create, update, and complete tasks during conversations, and the Heartbeat system would process open tasks autonomously between sessions. Tasks link across conversations and platforms --- something requested on Discord can be tracked and completed via Telegram. Subtasks support parent-child relationships, enabling complex multi-step work to be decomposed and tracked individually.
+
+---
+
+*The V2 features are designed to build on each other: Heartbeat enables autonomous task processing, task management gives Heartbeat structured work to do, voice adds a new interaction surface that feeds the same memory and identity pipeline, and the capability request loop closes the feedback cycle by letting Aerys participate in deciding what to build next.*
+
+## Getting Started
+
+Aerys runs as a Docker Compose stack with PostgreSQL (pgvector) and n8n. The basic deployment flow:
+
+```bash
+git clone https://github.com/your-username/Aerys-Resonant-Span.git
+cd Aerys-Resonant-Span
+cp .env.example .env
+# Edit .env with your credentials
+docker compose up -d
+```
+
+After the containers are running, import the workflow JSONs from the `workflows/` directory through the n8n UI, configure credentials for your API providers, and activate the workflows in dependency order.
+
+For complete setup instructions including API key configuration, workflow import order, and credential setup, see the [Setup Guide](docs/setup.md).
+
+## Tech Stack
+
+| Technology | Purpose | Why |
+|-----------|---------|-----|
+| [n8n](https://n8n.io) | Workflow orchestration | Visual execution flow, rapid iteration, workflow-as-documentation |
+| [PostgreSQL 16](https://www.postgresql.org/) | Structured data + memory storage | Robust, self-hosted, single database for all application data |
+| [pgvector](https://github.com/pgvector/pgvector) | Vector similarity search | Hybrid retrieval combining semantic, keyword, and recency signals |
+| [OpenRouter](https://openrouter.ai/) | Multi-model AI access | Vendor-agnostic, cost optimization across Gemini/Sonnet/Opus |
+| [Docker Compose](https://docs.docker.com/compose/) | Infrastructure | Reproducible deployment, portable across hardware (Tachyon to Jetson) |
+| [LangChain (n8n)](https://docs.n8n.io/integrations/builtin/cluster-nodes/root-nodes/n8n-nodes-langchain.agent/) | AI agent framework | Tool calling, memory management, prompt chaining within n8n |
+| [Tavily](https://tavily.com/) | Web search API | Purpose-built for AI agents, structured search results |
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [Setup Guide](docs/setup.md) | Prerequisites, API keys, workflow creation order |
+| [Database Schema](docs/schema.md) | Migration reference and table documentation |
+| [Configuration Reference](docs/configuration.md) | soul.md structure, credentials, environment variables |
+| [Development History](development/) | Build process from Phase 1 through Phase 6 |
+| [Workflow Exports](workflows/) | All 27 sanitized n8n workflow JSONs |
+
+## License
+
+MIT License - see [LICENSE](LICENSE) for details.
