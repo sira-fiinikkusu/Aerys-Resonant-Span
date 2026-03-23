@@ -299,7 +299,7 @@ For complete setup instructions including API key configuration, workflow import
 
 ## Screenshots
 
-<details>
+<details open>
 <summary><strong>n8n Workflows</strong> --- execution views showing the message pipeline</summary>
 
 ### Core Agent Router
@@ -322,7 +322,7 @@ Formats and delivers responses back to the originating platform. Handles Discord
 
 </details>
 
-<details>
+<details open>
 <summary><strong>Discord Interactions</strong> --- Aerys in conversation</summary>
 
 ### Tool Usage --- YouTube Analysis
