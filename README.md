@@ -26,6 +26,7 @@ Aerys processes messages across Discord, Telegram, and Gmail through a pipeline 
 - [Getting Started](#getting-started)
 - [Tech Stack](#tech-stack)
 - [Documentation](#documentation)
+- [Screenshots](#screenshots)
 - [License](#license)
 
 ## Architecture
@@ -295,6 +296,54 @@ For complete setup instructions including API key configuration, workflow import
 | [Configuration Reference](docs/configuration.md) | soul.md structure, credentials, environment variables |
 | [Development History](development/) | Build process from Phase 1 through Phase 6 |
 | [Workflow Exports](workflows/) | All 27 sanitized n8n workflow JSONs |
+
+## Screenshots
+
+<details>
+<summary><strong>n8n Workflows</strong> --- execution views showing the message pipeline</summary>
+
+### Core Agent Router
+
+The central routing workflow. Messages enter from platform adapters, pass through identity resolution, memory retrieval, and profile injection, then get classified by intent and routed to the appropriate model tier.
+
+<a href="assets/workflow-core-agent.png"><img src="assets/workflow-core-agent.png" width="600" /></a>
+
+### Sonnet Tier Sub-Workflow
+
+One of three tier sub-workflows (Gemini/Sonnet/Opus). Each tier runs as an independent sub-workflow with its own AI Agent, LLM connection, memory nodes, and 7 tool integrations. This architecture avoids the n8n task runner hang that occurs with too many LangChain tools in a single workflow.
+
+<a href="assets/workflow-sonnet-agent.png"><img src="assets/workflow-sonnet-agent.png" width="600" /></a>
+
+### Output Router
+
+Formats and delivers responses back to the originating platform. Handles Discord message splitting (2000-char limit), Telegram formatting, platform-specific emoji handling, and retry logic for transient DNS failures.
+
+<a href="assets/workflow-output-router.png"><img src="assets/workflow-output-router.png" width="600" /></a>
+
+</details>
+
+<details>
+<summary><strong>Discord Interactions</strong> --- Aerys in conversation</summary>
+
+### Tool Usage --- YouTube Analysis
+
+Aerys analyzes a shared YouTube link, extracting the video content and providing a thoughtful response that demonstrates both media processing capability and personality.
+
+<a href="assets/discord-tool-usage.png"><img src="assets/discord-tool-usage.png" width="600" /></a>
+
+### Personality --- Creative Conversation
+
+A back-and-forth showing Aerys adapting to the user's creative direction. The response style, humor, and willingness to engage with unconventional prompts reflect the personality defined in `soul.md`.
+
+<a href="assets/discord-personality.png"><img src="assets/discord-personality.png" width="600" /></a>
+
+### Memory Recall + Image Analysis
+
+Aerys analyzes a photo sent as an attachment (media tool) while referencing remembered context about the user's pets by name (memory recall), delivered with characteristic personality.
+
+<a href="assets/discord-memory-recall.png"><img src="assets/discord-memory-recall.png" width="600" /></a>
+
+</details>
 
 ## License
 
