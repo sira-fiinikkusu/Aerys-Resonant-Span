@@ -19,7 +19,7 @@ Not in scope: multi-modal memory, server-wide analytics, memory sharing between 
 
 ### Context injection priority
 - **Profile first** — person profile is always injected in full
-- **Short-term history second** — verbatim recent conversation (currently stored via n8n's Postgres Chat Memory node, ~60 turns, Claude may tune limit)
+- **Short-term history second** — verbatim recent conversation (currently stored via n8n's Postgres Chat Memory node, ~60 turns, the system may tune limit)
 - **Long-term memories third** — injected if space allows after profile + history
 
 ### Short-term history format
@@ -43,7 +43,7 @@ In parallel (zero latency impact), the same fetched messages feed the long-term 
 ### Cross-channel context
 - **Both channel-scoped and user-scoped, labeled separately**
 - When a user moves from a public channel to a DM, Aerys carries context from the public conversation — she remembers who said what, even across room boundaries
-- Whether to proactively reference public-channel context in DMs: Claude's discretion (natural vs intrusive judgment)
+- Whether to proactively reference public-channel context in DMs: implementation discretion (natural vs intrusive judgment)
 
 ### Privacy for cross-channel short-term injection
 - **Hybrid model** — not a simple hard block, not a simple filter
@@ -53,7 +53,7 @@ In parallel (zero latency impact), the same fetched messages feed the long-term 
 - This applies to both short-term history injection and long-term memory retrieval
 
 ### Long-term memory injection format
-- **Claude's discretion** — pick the format (prose block, bullets, inline) that works best for Aerys's LLM attention
+- **implementation discretion** — pick the format (prose block, bullets, inline) that works best for Aerys's LLM attention
 
 ### Long-term capture trigger
 - **Hourly scheduled batch job** — processes all observed messages from the last hour
@@ -71,10 +71,10 @@ When the LLM summarizes a conversation, extract:
 - **Single table with enforced privacy_level tag** (not separate DM/public stores)
 - Every memory tagged with `source_platform` and `privacy_level` at write time (MEM-08)
 - Retrieval always filters by privacy_level — private memories never surface in public contexts (MEM-09)
-- Deduplication strategy: Claude's discretion
+- Deduplication strategy: implementation discretion
 
 ### Summarization model
-- **Claude's discretion** — pick the model that balances extraction quality with hourly cost
+- **implementation discretion** — pick the model that balances extraction quality with hourly cost
 
 ### Retrieval strategy
 - **Recency + relevance blend** — 70% semantic similarity / 30% recency score
@@ -114,7 +114,7 @@ Adopt the prior project's two-table pattern (adapt, don't copy verbatim):
 - **Self-asserted facts** (`asserted_by: 'self'`) — fast-tracked to `approved` at lower confidence threshold
 - **Third-party facts** — start as `provisional`, promoted to `approved` when multi-source evidence accumulates
 - **Contradictions** → demote approved → provisional
-- Confidence scoring formula and LLM consolidation approach: Claude's discretion (a prior project's formula is the reference)
+- Confidence scoring formula and LLM consolidation approach: implementation discretion (a prior project's formula is the reference)
 - Status flow: `proposed` → `provisional` → `approved` (+ `locked` via user command)
 - TTL on provisional claims: ~90 days if not reinforced
 
@@ -123,7 +123,7 @@ Adopt the prior project's two-table pattern (adapt, don't copy verbatim):
 - **P2/P3** — user-visible (slash commands show these), injectable per privacy context rules
 
 ### User memory controls (Discord slash commands)
-Five commands — **naming decided by Claude** (must not collide with the other bot's existing commands in the same server):
+Five commands — **naming decided during implementation** (must not collide with the other bot's existing commands in the same server):
 1. List memories (equivalent to the other bot's memory commands)
 2. Lock a memory — protect from overwrite
 3. Forget a memory — retract/delete
@@ -137,12 +137,12 @@ Commands show memories at P2/P3 sensitivity only
 - **Yes, dedicated internal mutation webhook** — same architecture as the prior project's override API
 - All memory write operations (lock, retract, correct, add) route through this internal webhook
 - This allows multiple callers: slash commands, Aerys herself mid-conversation, future admin tooling
-- Read operations (list memories): Claude decides whether to go through the API or query directly
+- Read operations (list memories): the system decides whether to go through the API or query directly
 
 ### Embedding model
-- **Claude's discretion** — OpenRouter is available with access to all major providers. Pick the model that best balances embedding quality, cost at hourly batch scale, and vector dimensionality for pgvector. Both the long-term memory pipeline (write path) and retrieval (read path) use the same model.
+- **implementation discretion** — OpenRouter is available with access to all major providers. Pick the model that best balances embedding quality, cost at hourly batch scale, and vector dimensionality for pgvector. Both the long-term memory pipeline (write path) and retrieval (read path) use the same model.
 
-### Claude's Discretion
+### Implementation Discretion
 - Long-term memory injection format (prose, bullets, or inline in system prompt)
 - Deduplication strategy for repeated facts
 - Summarization model selection

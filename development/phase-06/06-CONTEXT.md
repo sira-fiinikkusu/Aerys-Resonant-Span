@@ -30,7 +30,7 @@ Make the system observable, privacy-safe, and resilient for daily use. Core Agen
 - New **#aerys-debug** Discord channel for Crabwalk-style thought traces
 - Trace fires on **every message** — model tier, timing, tool calls with tokens/cost
 - **No user content or Aerys output** in traces — privacy; traces show what she did, not what was said
-- Toggle mechanism: Claude's discretion (staticData flag or Load Config constant)
+- Toggle mechanism: implementation discretion (staticData flag or Load Config constant)
 - #echoes stays **separate** for errors (error routing to #echoes is new in P6, not existing)
 - Trace runs **in parallel** with user response delivery — never blocks
 
@@ -56,7 +56,7 @@ Make the system observable, privacy-safe, and resilient for daily use. Core Agen
 - **Sub-agent dependency declarations** — `dependencies` JSONB column listing required services; health-check verifies availability
 - **Context section merge strategy** — code comment conventions for injection patterns (replace, append, prepend, skip_if_empty)
 
-### Claude's Discretion
+### Implementation Discretion
 - Debug trace toggle implementation (staticData vs Load Config constant)
 - SQL write-back exact placement and error handling in Output Router
 - Sub-agent lifecycle/dependency schema details

@@ -43,7 +43,7 @@ Aerys gains four distinct capabilities — image/document/YouTube analysis, web 
 - **Source transparency:** Subtle distinction when she searches ("I looked into this..." vs answering from knowledge)
 - **Proactive search acknowledgment:** Brief signal before a search runs when she self-initiates
 - **LLM judgment across the board:** No hard-coded "always search for news" rules — all routing is intent-based
-- **Tavily config:** Claude's discretion — tune for accuracy (likely advanced depth + include_answer)
+- **Tavily config:** implementation discretion — tune for accuracy (likely advanced depth + include_answer)
 - **Memorable:** Research queries and findings feed into the memory system
 
 ### Gmail — Aerys's Own Inbox
@@ -59,7 +59,7 @@ Aerys gains four distinct capabilities — image/document/YouTube analysis, web 
 - **Use cases:** Scheduled morning brief (data source) + on-demand queries ("what emails do I have from X?")
 - **OAuth:** Both accounts (Aerys's + user's read-only) established in Phase 5
 
-### Claude's Discretion
+### Implementation Discretion
 - Exact Tavily configuration (depth, answer mode, result count)
 - Media sub-agent's internal file size limits and format detection logic
 - Tool registry table schema detail beyond what's captured here
@@ -71,7 +71,7 @@ Aerys gains four distinct capabilities — image/document/YouTube analysis, web 
 <specifics>
 ## Specific Ideas
 
-- Tool registry designed for the future "capability request loop" — Aerys requests a new capability, Claude Code builds it, registers it via INSERT, no Core Agent edits required
+- Tool registry designed for the future "capability request loop" — Aerys requests a new capability, the development toolchain builds it, registers it via INSERT, no Core Agent edits required
 - Aerys has her own email identity ([Aerys Gmail address]), distinct from the user's — she's not an extension of their inbox, she's a presence with her own correspondence
 - YouTube transcription as a natural extension of document analysis — same sub-agent, same memory pipeline, same voice response format
 - Sub-agent chaining example: user attaches a PDF and asks a question → media sub-agent extracts text, research sub-agent supplements with current web context, Core Agent synthesizes one coherent reply

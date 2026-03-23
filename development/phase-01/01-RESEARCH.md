@@ -38,15 +38,15 @@
 
 #### Hardware & network
 - Particle Tachyon board: Qualcomm QCM6490 8-core, 8GB RAM, 128GB flash, 12 TOPS NPU
-- Tachyon also runs Claude Code and OpenClaw — resource contention not a concern
+- Tachyon also runs the development toolchain and OpenClaw — resource contention not a concern
 - Wi-Fi connectivity only (5G cellular not activated)
 - Network access via Twingate (existing anchors on same network) — no VPN setup needed on Tachyon
 - NAS available on network for backups
 - API-based embeddings via OpenRouter for v1 (NPU-based local embeddings deferred)
 - Future migration path: Jetson Orin Nano Super (the target hardware) — plan Docker setup for portability
 
-### Claude's Discretion
-- Resource limits on Docker containers (decide based on shared Tachyon usage with Claude Code/OpenClaw)
+### Implementation Discretion
+- Resource limits on Docker containers (decide based on shared Tachyon usage with the development toolchain/OpenClaw)
 - DB backup strategy (whether to automate backups to NAS — lean toward yes given data importance)
 - Phase 1 schema scope (only tables needed now vs skeleton for later — lean toward minimal, using migrations to add)
 - Docker installation steps if not already present on the Tachyon
@@ -73,7 +73,7 @@ Phase 1 is a well-understood infrastructure setup with an official Docker Compos
 
 The schema design is straightforward PostgreSQL with one pgvector wrinkle: the HNSW index on a `vector(1536)` column should be created after the initial data load (not at table creation time) to avoid building an index over an empty dataset, though it works either way. For the migration file approach, PostgreSQL's `/docker-entrypoint-initdb.d/` mechanism runs scripts alphabetically on first container start, which maps cleanly to the `001_init.sql`, `002_add_tags.sql` convention.
 
-The key discretionary decisions: apply soft container resource limits (2 CPU / 2GB Postgres, 2 CPU / 1GB n8n) to keep Tachyon headroom for Claude Code and OpenClaw; automate NAS backups via a daily `pg_dump` cron; keep Phase 1 schema minimal (conversations, messages, memories, persons tables only — no channel-routing or embedding pipeline tables yet, those come in Phase 2+).
+The key discretionary decisions: apply soft container resource limits (2 CPU / 2GB Postgres, 2 CPU / 1GB n8n) to keep Tachyon headroom for the development toolchain and OpenClaw; automate NAS backups via a daily `pg_dump` cron; keep Phase 1 schema minimal (conversations, messages, memories, persons tables only — no channel-routing or embedding pipeline tables yet, those come in Phase 2+).
 
 **Primary recommendation:** Use the official `n8n-io/n8n-hosting` Docker Compose template as the base, adapt it to bind-mounts at `~/aerys/`, add `pgvector/pgvector:pg16` as the database image, and provision schema via numbered SQL files mounted into `/docker-entrypoint-initdb.d/`.
 
@@ -530,13 +530,13 @@ EXECUTIONS_DATA_PRUNE_MAX_COUNT=10000
 ## Discretionary Recommendations
 
 ### Resource Limits
-The Tachyon has 8GB RAM and 8 cores, shared with Claude Code and OpenClaw. Recommended limits:
+The Tachyon has 8GB RAM and 8 cores, shared with the development toolchain and OpenClaw. Recommended limits:
 
 | Container | CPU limit | Memory limit | Rationale |
 |-----------|-----------|--------------|-----------|
 | postgres | 2.0 | 2G | DB needs headroom for queries; 2G leaves 6G for other processes |
 | n8n | 2.0 | 1G | n8n workflows are lightweight; 1G is generous |
-| Total reserved | 4 cores | 3G | Leaves 4 cores + 5G for Claude Code + OpenClaw |
+| Total reserved | 4 cores | 3G | Leaves 4 cores + 5G for the development toolchain + OpenClaw |
 
 Use `deploy.resources` in Docker Compose v2 plugin syntax (verified working with standalone compose, not just Swarm).
 
@@ -571,7 +571,7 @@ Check first: `docker --version && docker compose version`. If present, skip inst
 ## Open Questions
 
 1. **Is Docker already installed on the Tachyon?**
-   - What we know: Tachyon runs Claude Code and OpenClaw, both of which may use Docker
+   - What we know: Tachyon runs the development toolchain and OpenClaw, both of which may use Docker
    - What's unclear: Whether Docker Engine + Docker Compose plugin are present
    - Recommendation: First task in Plan 01-01 should be `docker --version && docker compose version` check; install only if absent
 

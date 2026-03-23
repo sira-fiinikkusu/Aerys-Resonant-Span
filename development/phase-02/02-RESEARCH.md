@@ -57,7 +57,7 @@
 - **Discord embeds:** Yes, for structured output — conversational messages stay as plain text
 - **Message splitting:** Natural boundaries — split at paragraph breaks, after code blocks, between logical sections (Discord 2000 char, Telegram 4096)
 
-### Claude's Discretion
+### Implementation Discretion
 - Channel formatter architecture — whether it's a separate n8n node or integrated into the output router
 - Discord reactions — whether to use acknowledge reactions (e.g., eyes emoji) for seen-but-no-verbal-response cases
 - Code block language tagging — whether to always specify language for syntax highlighting or use generic blocks
@@ -654,12 +654,12 @@ n8n:
    - What's unclear: Actual per-call token cost for typical Aerys interactions (no usage data yet).
    - Recommendation: Set `OPUS_DAILY_LIMIT=10` initially. Monitor via `aerys_model_usage` table. Tune after first week of usage.
 
-4. **Discord reactions for Claude's Discretion area**
+4. **Discord reactions for Implementation Discretion area**
    - What we know: Discord supports message reactions. The community node supports Discord send operations.
    - What's unclear: Whether the Discord community node can add reactions (vs. send messages).
    - Recommendation: Use eyes emoji reaction (`👀`) for seen-but-processing acknowledgment when trigger is received; implement via HTTP Request to Discord API `PUT /channels/{id}/messages/{id}/reactions/{emoji}/@me`.
 
-5. **Code block language tagging (Claude's Discretion)**
+5. **Code block language tagging (Implementation Discretion)**
    - What we know: Discord renders language-tagged code blocks with syntax highlighting. Telegram ignores language tag in HTML mode.
    - Recommendation: Always specify language tag in Discord responses when the LLM provides it. Use generic backtick blocks when language is ambiguous. The AI model typically outputs language tags naturally; preserve them in the formatter.
 
@@ -674,7 +674,7 @@ n8n:
 - n8n official docs — AI Agent node: https://docs.n8n.io/integrations/builtin/cluster-nodes/root-nodes/n8n-nodes-langchain.agent/
 - n8n official docs — Postgres Chat Memory: https://docs.n8n.io/integrations/builtin/cluster-nodes/sub-nodes/n8n-nodes-langchain.memorypostgreschat/
 - n8n official docs — Read/Write Files from Disk: https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.readwritefile/
-- OpenRouter model listing: https://openrouter.ai/models?arch=Claude
+- OpenRouter model listing: https://openrouter.ai/models
 - npm package registry — `@kmcbride3/n8n-nodes-discord` v0.7.6 (published Nov 2025)
 
 ### Secondary (MEDIUM confidence)
@@ -697,7 +697,7 @@ n8n:
 - Standard stack: HIGH — verified via npm registry (published dates), official n8n docs, and OpenRouter API listings
 - Architecture patterns: HIGH — patterns derived from official n8n node documentation and verified community implementations
 - Pitfalls: HIGH (most verified via GitHub issues or official docs); Pitfall 1 ARM64 bit is LOW
-- Claude's Discretion recommendations: MEDIUM — reasoned from platform capabilities, not empirically tested
+- Implementation Discretion recommendations: MEDIUM — reasoned from platform capabilities, not empirically tested
 
 **Research date:** 2026-02-17
 **Valid until:** 2026-03-17 (30 days — n8n community nodes update frequently; re-verify package versions)

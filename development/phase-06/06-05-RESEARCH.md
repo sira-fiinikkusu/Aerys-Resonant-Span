@@ -30,7 +30,7 @@ This research covers the FINAL plan of V1, focusing on two intertwined goals: (1
 - Sub-agent lifecycle state + dependency declarations already deployed (06-04)
 - Context section merge strategy via code comment conventions
 
-### Claude's Discretion
+### Implementation Discretion
 - Research sub-agent: keep as sub-workflow vs rewire as direct tool
 - Tool description rewrites for reliability
 - soul.md reactive rewrite content (rules derived from failures)

@@ -128,7 +128,7 @@ The plan only specified Task 1 (admin commands) and Task 2 (checkpoint). The dis
 - Aerys should reply in the DM thread
 - DB should have a discord platform_identities row for the DM user
 
-This is the one verification step that requires a human (Claude Code cannot send Discord DMs). The infrastructure is built and active.
+This is the one verification step that requires a human (the development toolchain cannot send Discord DMs). The infrastructure is built and active.
 
 ## Next Phase Readiness
 

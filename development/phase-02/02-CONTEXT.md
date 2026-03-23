@@ -64,7 +64,7 @@ Aerys can receive a message on Discord or Telegram, reason about it as herself, 
 - **Discord embeds:** Yes, for structured output (research results, summaries, multi-part answers) — conversational messages stay as plain text
 - **Message splitting:** Natural boundaries — split at paragraph breaks, after code blocks, between logical sections (Discord 2000 char limit, Telegram 4096)
 
-### Claude's Discretion
+### Implementation Discretion
 - Channel formatter architecture — whether it's a separate n8n node or integrated into the output router
 - Discord reactions — whether to use acknowledge reactions (e.g., eyes emoji) for seen-but-no-verbal-response cases
 - Code block language tagging — whether to always specify language for syntax highlighting or use generic blocks

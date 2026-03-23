@@ -41,7 +41,7 @@ The n8n instance (v2.35.5) supports all required features: Guardrails node (requ
 - Sub-agent dependency declarations (JSONB column) on sub_agents table
 - Context section merge strategy via code comment conventions
 
-### Claude's Discretion
+### Implementation Discretion
 - Debug trace toggle implementation (staticData vs Load Config constant)
 - SQL write-back exact placement and error handling in Output Router
 - Sub-agent lifecycle/dependency schema details
@@ -170,7 +170,7 @@ ORDER BY id DESC
 LIMIT 1;
 ```
 
-**Placement (Claude's discretion recommendation):** After Set Polished Response, before Platform Formatter. Use a Code node to build the query, then a Postgres executeQuery node.
+**Placement (implementation discretion recommendation):** After Set Polished Response, before Platform Formatter. Use a Code node to build the query, then a Postgres executeQuery node.
 
 **Error handling:** `continueOnFail: true` on the write-back node -- write-back failure must never block user response delivery. Log failures to debug trace.
 
@@ -198,7 +198,7 @@ LIMIT 1;
 +-- Total: 1,459 tokens $0.0007
 ```
 
-**Toggle mechanism (Claude's discretion recommendation):** Use an n8n variable `AERYS_DEBUG_ENABLED` (string 'true'/'false'). Check in a Code node at the fork point. This is simpler than staticData and visible in n8n UI Settings > Variables.
+**Toggle mechanism (implementation discretion recommendation):** Use an n8n variable `AERYS_DEBUG_ENABLED` (string 'true'/'false'). Check in a Code node at the fork point. This is simpler than staticData and visible in n8n UI Settings > Variables.
 
 ### Pattern 4: Central Error Workflow
 

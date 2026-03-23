@@ -20,7 +20,7 @@
 - Admin operations (force-link, unlink, inspect) are performed via bot commands sent to Aerys
 - Admin status is determined by Discord role (a specific role grants elevated access)
 - When an admin force-links two accounts, both affected users are notified on their respective platforms
-- Claude's discretion: whether to include a bot-side list command or rely on direct DB for audit
+- implementation discretion: whether to include a bot-side list command or rely on direct DB for audit
 
 **Unlinked user behavior**
 - Unlinked users are treated as full participants — no restrictions, no prompting to link
@@ -32,9 +32,9 @@
 - Store per person: canonical ID, platform IDs (discord_id, telegram_id), display name, metadata
 - Display name: auto-populated from platform (Discord username / Telegram first name) and user-overridable via command (e.g., `!profile name Alice`)
 - Metadata: JSONB catch-all for Phase 4 to populate — Phase 3 defines the column but not its schema
-- Schema design, identity resolver placement, and user self-query scope: Claude's discretion (design for Phase 4 compatibility)
+- Schema design, identity resolver placement, and user self-query scope: implementation discretion (design for Phase 4 compatibility)
 
-### Claude's Discretion
+### Implementation Discretion
 
 - Schema design: whether to extend person_profiles or introduce a separate platform_identities join table
 - Canonical ID format for unlinked users (e.g., `discord:123456` namespaced vs raw ID)

@@ -41,7 +41,7 @@
 - Source transparency: Subtle distinction when she searches ("I looked into this..." vs answering from knowledge)
 - Proactive search acknowledgment: Brief signal before a search runs when she self-initiates
 - LLM judgment across the board: No hard-coded "always search for news" rules — all routing is intent-based
-- Tavily config: Claude's discretion — tune for accuracy (likely advanced depth + include_answer)
+- Tavily config: implementation discretion — tune for accuracy (likely advanced depth + include_answer)
 - Memorable: Research queries and findings feed into the memory system
 
 **Gmail — Aerys's Own Inbox**
@@ -57,7 +57,7 @@
 - Use cases: Scheduled morning brief (data source) + on-demand queries ("what emails do I have from X?")
 - OAuth: Both accounts (Aerys's + user's read-only) established in Phase 5
 
-### Claude's Discretion
+### Implementation Discretion
 - Exact Tavily configuration (depth, answer mode, result count)
 - Media sub-agent's internal file size limits and format detection logic
 - Tool registry table schema detail beyond what's captured here

@@ -42,15 +42,15 @@ Set up the foundational stack for Aerys: PostgreSQL 16 with pgvector, n8n instan
 
 ### Hardware & network
 - Particle Tachyon board: Qualcomm QCM6490 8-core, 8GB RAM, 128GB flash, 12 TOPS NPU
-- Tachyon also runs Claude Code and OpenClaw — resource contention not a concern
+- Tachyon also runs the development toolchain and OpenClaw — resource contention not a concern
 - Wi-Fi connectivity only (5G cellular not activated)
 - Network access via Twingate (existing anchors on same network) — no VPN setup needed on Tachyon
 - NAS available on network for backups
 - API-based embeddings via OpenRouter for v1 (NPU-based local embeddings deferred)
 - Future migration path: Jetson Orin Nano Super (the target hardware) — plan Docker setup for portability
 
-### Claude's Discretion
-- Resource limits on Docker containers (decide based on shared Tachyon usage with Claude Code/OpenClaw)
+### Implementation Discretion
+- Resource limits on Docker containers (decide based on shared Tachyon usage with the development toolchain/OpenClaw)
 - DB backup strategy (whether to automate backups to NAS — lean toward yes given data importance)
 - Phase 1 schema scope (only tables needed now vs skeleton for later — lean toward minimal, using migrations to add)
 - Docker installation steps if not already present on the Tachyon

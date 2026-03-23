@@ -31,7 +31,7 @@ In parallel (zero latency impact), the same fetched messages feed the long-term 
 
 **Privacy for cross-channel short-term injection:** Hybrid model — DM content crosses to public only if (a) non-private and (b) contains no PII not already shared publicly. Sensitive DM content: hard blocked from public injection.
 
-**Long-term memory injection format:** Claude's discretion.
+**Long-term memory injection format:** implementation discretion.
 
 **Long-term capture trigger:** Hourly scheduled batch job — processes all observed messages from the last hour.
 
@@ -39,7 +39,7 @@ In parallel (zero latency impact), the same fetched messages feed the long-term 
 
 **Long-term memory storage:** Single table with enforced `privacy_level` tag. Every memory tagged with `source_platform` and `privacy_level` at write time. Retrieval filters by `privacy_level`.
 
-**Summarization model:** Claude's discretion.
+**Summarization model:** implementation discretion.
 
 **Retrieval strategy:** 70% semantic similarity / 30% recency score. Top 5 memories per turn. Per-user + per-channel. Pre-fetch on message receipt.
 
@@ -64,15 +64,15 @@ In parallel (zero latency impact), the same fetched messages feed the long-term 
 
 **Sensitivity tiers:** P1 (internal only), P2/P3 (user-visible, injectable per privacy rules)
 
-**User memory controls (Discord slash commands):** Five commands — naming decided by Claude (must not collide with the other bot's memory commands, `/memory-lock`, `/memory-forget`, `/memory-correct`). All ephemeral. Show P2/P3 only.
+**User memory controls (Discord slash commands):** Five commands — naming decided during implementation (must not collide with the other bot's memory commands, `/memory-lock`, `/memory-forget`, `/memory-correct`). All ephemeral. Show P2/P3 only.
 
 **Override API pattern:** Dedicated internal mutation webhook. All memory write operations route through this internal webhook.
 
-**Embedding model:** Claude's discretion (OpenRouter — quality/cost/dimensionality tradeoff).
+**Embedding model:** implementation discretion (OpenRouter — quality/cost/dimensionality tradeoff).
 
 **Known flaw to improve on from a prior project's Guardian:** the prior implementation's consolidation groups only by identical `key_label` — misses cross-key entity references. Aerys must use semantic embedding pre-filtering and/or entity-aware grouping before LLM consolidation.
 
-### Claude's Discretion
+### Implementation Discretion
 - Long-term memory injection format (prose, bullets, or inline in system prompt)
 - Deduplication strategy for repeated facts
 - Summarization model selection
@@ -258,7 +258,7 @@ const transcript = participantSummary + lines.join('\n').slice(0, 5800);
 
 **MEM-05 impact:** If switching to `memoryBufferWindow`, restart recovery relies on the pull-on-trigger channel fetch (which gets recent messages from Discord API). The in-agent buffer rebuilds from channel context on next message. This is adequate for group channels where recent history exists in Discord.
 
-**Recommendation (Claude's discretion):** Keep `memoryPostgresChat` for MEM-05 compliance but change the session key from `person_id` to the correct channel-scoped key per the context decisions:
+**Recommendation (implementation discretion):** Keep `memoryPostgresChat` for MEM-05 compliance but change the session key from `person_id` to the correct channel-scoped key per the context decisions:
 - Guild Discord: `discord_{channel_id}`
 - Discord DM: `dm_{person_id}` (already correct — channel IDs can change for DMs)
 - Telegram: `telegram_{chat_id}`
