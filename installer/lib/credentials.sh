@@ -409,8 +409,13 @@ run_credential_wizard() {
   # each one as a fresh prompt. For first-time installs this is a no-op.
   _load_existing_env "$env_target"
 
+  # `set -u` (nounset) trips on `${#assoc_arr[@]}` for empty associative
+  # arrays in some bash versions even when the array is declared. Run the
+  # length check in a subshell with nounset off to avoid the false trip.
+  local existing_count
+  existing_count=$(set +u; echo "${#AERYS_ENV[@]}")
   local banner_note
-  if [ "${#AERYS_ENV[@]}" -gt 0 ]; then
+  if [ "${existing_count:-0}" -gt 0 ]; then
     banner_note="Found existing configuration in ${env_target}. Each section will let
 you [k]eep, [u]pdate, or [r]emove its current values. Sections you
 never configured will prompt you normally."
