@@ -539,6 +539,9 @@ Setup:
   init-db               Stage + run database migrations
   verify-db             Verify the Aerys schema is present
   install-community-nodes  Install required community packages into running n8n
+  install-discord-watchdog Install user systemd unit that fixes the Discord IPC
+                        race on every n8n restart (recommended if you use both
+                        DM and guild Discord adapters)
   upgrade-workflows [--api-key KEY]
                         Install community nodes + import 23 workflows + activate.
                         On first run, prompts for the n8n API key (hidden input)

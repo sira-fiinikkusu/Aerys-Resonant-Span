@@ -131,6 +131,9 @@ Two reasons, in order of importance:
 ./aerys upgrade-workflows     # install community nodes + import + activate 23 workflows
                               # (prompts for n8n API key on first run; stores in .env)
 ./aerys health                # end-to-end verification post-install (uses stored API key)
+./aerys install-discord-watchdog  # user systemd unit that fixes the Discord IPC
+                              # race on every n8n restart (recommended if both
+                              # DM and guild adapters are configured)
 ./aerys update                # regen compose + config (post-git-pull refresh)
 ./aerys uninstall             # tear down deployment (prompts before destroying data)
 

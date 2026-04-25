@@ -113,6 +113,12 @@ run_uninstall() {
     remove_shell_integration
   fi
 
+  # Step 4b: remove the Discord watchdog systemd unit if installed.
+  # Defined in discord-watchdog.sh. No-op if never installed.
+  if declare -f _watchdog_uninstall >/dev/null 2>&1; then
+    _watchdog_uninstall
+  fi
+
   # Step 4: remove the CLI persisted config so stale DEPLOY_DIR/ENV_PATH
   # paths don't leak into the next install. (The file lives at
   # $XDG_CONFIG_HOME/aerys/config or ~/.aerys/config — see cli.sh.)

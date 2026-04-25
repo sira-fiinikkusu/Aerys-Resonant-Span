@@ -65,6 +65,8 @@ source "${LIB_DIR}/healthcheck.sh"
 source "${LIB_DIR}/uninstall.sh"
 # shellcheck source=lib/cli.sh
 source "${LIB_DIR}/cli.sh"
+# shellcheck source=lib/discord-watchdog.sh
+source "${LIB_DIR}/discord-watchdog.sh"
 
 usage() {
   cat <<EOF
@@ -150,7 +152,8 @@ main() {
   esac
   case "$subcmd" in
     install|update|upgrade-workflows|health|check|credentials|compose|config\
-    |init-db|verify-db|install-community-nodes|start|stop|restart|watch\
+    |init-db|verify-db|install-community-nodes|install-discord-watchdog\
+    |start|stop|restart|watch\
     |rename|set-webhook|register-telegram|uninstall|help)
       shift  # consume the verb
       # Peek args for --deploy-dir / --env-path / --api-key overrides
@@ -181,6 +184,8 @@ main() {
         init-db)      init_db=1 ;;
         verify-db)    verify_db=1 ;;
         install-community-nodes) install_community_nodes_flag=1 ;;
+        install-discord-watchdog)
+          cmd_install_discord_watchdog "$deploy_dir" "$env_path"; exit $? ;;
         upgrade-workflows)
           import_workflows=1
           # api_key is resolved later (env → prompt) so the flag is optional.
@@ -430,6 +435,10 @@ main() {
   # Offer tab completion. Interactive prompt (y/n, default y); idempotent
   # if already installed; skip silently if shell isn't bash/zsh.
   offer_shell_integration
+
+  # Offer Discord IPC watchdog if Discord is configured. Without this, only
+  # one of the two Discord adapters listens after any n8n container restart.
+  offer_discord_watchdog "$deploy_dir" "$env_path"
 
   # n8n requires interactive owner setup before API access works, so the
   # workflow import phase isn't auto-chained here. Print clear next-steps:

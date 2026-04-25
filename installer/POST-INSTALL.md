@@ -274,6 +274,17 @@ alone is useless.
 - Ensure both DM adapter AND guild adapter are active, and they were
   activated in the right order (DM first, guild last). If you restart the
   stack, re-activate guild adapter LAST (Discord's IPC is last-wins).
+- **Permanent fix:** install the IPC watchdog so this happens automatically
+  on every n8n container start:
+  ```bash
+  ./aerys install-discord-watchdog
+  ```
+  Creates a per-user systemd unit that watches docker events and re-applies
+  the deactivate/reactivate sequence whenever n8n restarts. Recommended for
+  any deploy with both DM and guild adapters. Survives reboots if user-linger
+  is enabled (the script offers to enable it).
+- View watchdog logs: `journalctl --user -u aerys-discord-watchdog.service -f`
+- Disable: `systemctl --user disable --now aerys-discord-watchdog.service`
 
 ### "My AI talks like [someone else's personality]"
 - You might have imported an older workflow over a newer one. Or: the

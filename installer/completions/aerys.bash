@@ -19,6 +19,7 @@ _aerys_completions() {
 
   local subcommands="install update upgrade-workflows health check credentials
                      compose config init-db verify-db install-community-nodes
+                     install-discord-watchdog
                      start stop restart watch
                      rename set-webhook register-telegram
                      uninstall help"
