@@ -20,6 +20,14 @@ _watchdog_install() {
     return 1
   fi
 
+  # Absolutize env_path before embedding in the unit: systemd runs the
+  # script with WD=/ so a relative ".env" resolves to "/.env" and the
+  # API-key read silently fails. Anchor relative paths to deploy_dir.
+  case "$env_path" in
+    /*) ;;
+    *)  env_path="$(cd "$deploy_dir" 2>/dev/null && pwd)/${env_path}" ;;
+  esac
+
   if ! command -v systemctl >/dev/null 2>&1; then
     log_warn "systemctl not present — skipping Discord watchdog setup."
     log_warn "On non-systemd systems, run the watcher manually:"
